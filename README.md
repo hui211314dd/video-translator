@@ -14,7 +14,3 @@ npx skills add https://github.com/hui211314dd/video-translator
 ```
 /video-translator @目标文件.mp4 执行 skill 流程
 ```
-
-## TODO
-
-将来考虑把所需的工具比如 ffmpeg、whisper-cli 以及 model 都放在 skill 里面;
