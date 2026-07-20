@@ -1,7 +1,7 @@
 ---
 name: video-translator
 author: JimmyLi
-description: 利用 FFmpeg 和 Whisper 提取英文视频或者音频中的语音内容，导出成 txt 文件和srt字幕文件, 最后将字幕压制到视频中生成一个带字幕的mp4文件;
+description: 利用 FFmpeg 和 Whisper 提取英文视频或者音频中的语音内容，导出成 txt 文件和srt字幕文件，翻译成中文后生成中英双语 ASS 字幕（中文大号在上、英文小号在下），最后将双语字幕压制到视频中生成一个带字幕的mp4文件;
 disable-model-invocation: true
 allowed-tools: ffmpeg, whisper-cli, Bash(ffmpeg*), Bash(whisper-cli*)
 ---
@@ -16,6 +16,8 @@ allowed-tools: ffmpeg, whisper-cli, Bash(ffmpeg*), Bash(whisper-cli*)
 ## Skill 介绍
 
 利用 ffmpeg 工具将用户提供的视频转换成音频文件，然后使用 Whisper 工具 + ggml-medium-q8_0 模型 将音频文件解析成全文本或者字幕文件，这个流程可以帮助用户快速获取视频中的语音内容，并且方便地进行翻译和观看。
+
+最终导出的视频带有中英双语对照字幕：中文在上、字号较大，英文原文在下、字号较小。该效果通过 ASS 字幕格式实现（SRT 不支持同一条字幕内两种字号，因此不用 SRT 作为最终压制字幕）。
 
 
 ## Skill 流程
@@ -46,7 +48,7 @@ allowed-tools: ffmpeg, whisper-cli, Bash(ffmpeg*), Bash(whisper-cli*)
     ```
     若时间轴明显不对（末尾时间远小于音频时长、或中途出现时间回退），说明转写异常，需用 `-p 1` 重新转写后再继续。
 
-5. 将 txt 文件中的内容翻译成中文并保存到同目录的另外一个 txt 文件中，同时将翻译后的文本输出在控制台上，翻译过程中有如下要求：
+5. 将 txt 文件中的内容翻译成中文并保存到同目录的另外一个 txt 文件中，翻译过程中有如下要求：
     * 翻译前先大概了解这是哪个领域的视频内容，比如游戏开发、电影、科技等，以便更好地理解和翻译文本内容；
     * txt 文件中的内容可能包含一些专业术语或者缩写，需要根据上下文进行合理的翻译，确保翻译结果准确且易于理解；
     * 如果某个词汇是这个领域/软件的专业词汇，可以不翻译，比如"Commit", "CheckOut", "MotionMatching"等(**需要你自行判断**);
@@ -54,17 +56,45 @@ allowed-tools: ffmpeg, whisper-cli, Bash(ffmpeg*), Bash(whisper-cli*)
     * 标点符合要符合中文技术文档的要求；
     * 要事无巨细的翻译，翻译时切勿丢掉任何内容;
 
-6. [重要]将翻译后的内容同步到 srt 字幕文件中，确保字幕文件中的时间轴和翻译后的文本内容一致。
+6. [重要]生成中英双语字幕文件（ASS 格式）。SRT 不支持同一条字幕内两种字号，因此使用 ASS 格式实现"中文大号在上、英文小号在下"的对照效果：
 
-7. 执行ffmpeg指令将翻译后的srt字幕文件压制到视频文件中，生成一个新的带字幕的mp4文件，指令如下:
+    * **不要覆盖** whisper 生成的英文 srt（它是时间轴和英文原文的唯一来源）；
+    * 将第 5 步翻译好的中文与英文 srt 逐条配对：ASS 中的条目数量、时间轴必须与英文 srt **完全一致**（一条 srt 条目对应一条 Dialogue），确保音画同步；如果一条 srt 条目的英文被拆成了多句中文翻译，需合并精简为一行中文；
+    * 每条 Dialogue 的文本格式为 `中文内容\N{\rEN}英文原文`，其中 `\N` 表示换行（中文在上），`{\rEN}` 表示英文行切换为 EN 样式（小字号，显示在下方）；
+    * 时间格式需从 srt 的 `HH:MM:SS,mmm` 转换为 ASS 的 `H:MM:SS.cc`（厘秒，例如 `00:01:23,456` → `0:01:23.45`）；
+    * 如果字幕文本中含有 `{` 或 `}`，需删除或替换（ASS 中花括号是样式控制符）；
+    * 在视频同目录生成 `视频名_bilingual.ass`，完整模板如下（字号、字体、颜色可按需微调）：
+
+        ```ass
+        [Script Info]
+        ScriptType: v4.00+
+        PlayResX: 1920
+        PlayResY: 1080
+        ScaledBorderAndShadow: yes
+        WrapStyle: 0
+
+        [V4+ Styles]
+        Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+        Style: CN,Microsoft YaHei,48,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2,0,2,40,40,35,1
+        Style: EN,Microsoft YaHei,26,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,1.5,0,2,40,40,35,1
+
+        [Events]
+        Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+        Dialogue: 0,0:00:01.00,0:00:04.00,CN,,0,0,0,,我们的工具只允许我们将数据输出到属性面板\N{\rEN}that our tools only allowed us to express the data in a properties panel
+        ```
+
+    * 模板说明：CN 为中文样式（Fontsize 48，显示在上方一行），EN 为英文样式（Fontsize 26，显示在下方一行）；Alignment=2 表示底部居中；白字黑边；PlayRes 设为 1920x1080 时 Fontsize 即像素值，其他分辨率的视频会按比例自动缩放，无需修改模板。
+    * 生成后抽查前几条和最后几条 Dialogue：时间轴与 srt 一致、中英文内容对应正确、`\N{\rEN}` 书写无误。
+
+7. 执行ffmpeg指令将双语 ASS 字幕压制到视频文件中，生成一个带中英对照字幕的mp4文件（样式已写在 ass 文件内，无需 force_style），指令如下:
 
     ```
-    ffmpeg -i ".\SoureMedia.mp4" -vf "subtitles='Result中文.srt':force_style='Outline=1,Shadow=0,OutlineColour=&H66000000'" SourceMedia_Result.mp4
+    ffmpeg -i ".\SourceMedia.mp4" -vf "subtitles='SourceMedia_bilingual.ass'" SourceMedia_Result.mp4
     ```
 
 ## 举例
 
-假设用户传入了一个视频资源 "C:\Users\JimmyLi\Videos\12345.mp4"，那么 Skill 会先使用 ffmpeg 将其转换成 mp3 音频文件 "C:\Users\JimmyLi\Videos\12345.mp3"，然后使用 Whisper 将 mp3 文件解析成字幕文件 "C:\Users\JimmyLi\Videos\12345.mp3.srt" 和全文本 "C:\Users\JimmyLi\Videos\12345.mp3.txt"，用户可以根据需要选择使用哪个文件，最后 Skill 会将 "C:\Users\JimmyLi\Videos\12345.mp3.txt" 中的内容翻译成中文并输出在控制台上，同时保存到 "C:\Users\JimmyLi\Videos\12345_翻译.txt" 文件中，12345.mp3.srt 字幕文件中的内容也替换成了中文，并且没有更改时间轴。
+假设用户传入了一个视频资源 "C:\Users\JimmyLi\Videos\12345.mp4"，那么 Skill 会先使用 ffmpeg 将其转换成 mp3 音频文件 "C:\Users\JimmyLi\Videos\12345.mp3"，然后使用 Whisper 将 mp3 文件解析成字幕文件 "C:\Users\JimmyLi\Videos\12345.mp3.srt" 和全文本 "C:\Users\JimmyLi\Videos\12345.mp3.txt"，用户可以根据需要选择使用哪个文件，最后 Skill 会将 "C:\Users\JimmyLi\Videos\12345.mp3.txt" 中的内容翻译成中文并保存到 "C:\Users\JimmyLi\Videos\12345_翻译.txt" 文件中；再根据 12345.mp3.srt（保留英文原文，不做改动）逐条配对生成双语字幕文件 "C:\Users\JimmyLi\Videos\12345_bilingual.ass"（每条字幕 = 中文一行 + 英文原文一行，时间轴与 srt 完全一致），最后将双语字幕压制到视频中。
 
 ```
 ffmpeg -i "C:\Users\JimmyLi\Videos\12345.mp4" -vn "C:\Users\JimmyLi\Videos\12345.mp3"
@@ -74,5 +104,5 @@ whisper-cli -m ggml-medium-q8_0.bin  -t 8 -p 1 -fa -nf "C:\Users\JimmyLi\Videos\
 
 然后执行
 ```
-ffmpeg -i "C:\Users\JimmyLi\Videos\12345.mp4" -vf "subtitles='12345_翻译.txt':force_style='Outline=1,Shadow=0,OutlineColour=&H66000000'" 12345_Result.mp4
+ffmpeg -i "C:\Users\JimmyLi\Videos\12345.mp4" -vf "subtitles='12345_bilingual.ass'" 12345_Result.mp4
 ```
