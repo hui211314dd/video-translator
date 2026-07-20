@@ -1,7 +1,7 @@
 ---
 name: video-translator
 author: JimmyLi
-description: 利用 FFmpeg 和 Whisper 提取英文视频或者音频中的语音内容，导出成 txt 文件的流程 (根据用户的选项也可以导出成 srt 字幕文件), 最后要求将 txt 文件中的内容翻译成中文并输出在控制台上;
+description: 利用 FFmpeg 和 Whisper 提取英文视频或者音频中的语音内容，导出成 txt 文件和srt字幕文件, 最后将字幕压制到视频中生成一个带字幕的mp4文件;
 disable-model-invocation: true
 allowed-tools: ffmpeg, whisper-cli, Bash(ffmpeg*), Bash(whisper-cli*)
 ---
@@ -56,6 +56,12 @@ allowed-tools: ffmpeg, whisper-cli, Bash(ffmpeg*), Bash(whisper-cli*)
 
 6. [重要]将翻译后的内容同步到 srt 字幕文件中，确保字幕文件中的时间轴和翻译后的文本内容一致。
 
+7. 执行ffmpeg指令将翻译后的srt字幕文件压制到视频文件中，生成一个新的带字幕的mp4文件，指令如下:
+
+    ```
+    ffmpeg -i ".\SoureMedia.mp4" -vf "subtitles='Result中文.srt':force_style='Outline=1,Shadow=0,OutlineColour=&H66000000'" SourceMedia_Result.mp4
+    ```
+
 ## 举例
 
 假设用户传入了一个视频资源 "C:\Users\JimmyLi\Videos\12345.mp4"，那么 Skill 会先使用 ffmpeg 将其转换成 mp3 音频文件 "C:\Users\JimmyLi\Videos\12345.mp3"，然后使用 Whisper 将 mp3 文件解析成字幕文件 "C:\Users\JimmyLi\Videos\12345.mp3.srt" 和全文本 "C:\Users\JimmyLi\Videos\12345.mp3.txt"，用户可以根据需要选择使用哪个文件，最后 Skill 会将 "C:\Users\JimmyLi\Videos\12345.mp3.txt" 中的内容翻译成中文并输出在控制台上，同时保存到 "C:\Users\JimmyLi\Videos\12345_翻译.txt" 文件中，12345.mp3.srt 字幕文件中的内容也替换成了中文，并且没有更改时间轴。
@@ -64,4 +70,9 @@ allowed-tools: ffmpeg, whisper-cli, Bash(ffmpeg*), Bash(whisper-cli*)
 ffmpeg -i "C:\Users\JimmyLi\Videos\12345.mp4" -vn "C:\Users\JimmyLi\Videos\12345.mp3"
 
 whisper-cli -m ggml-medium-q8_0.bin  -t 8 -p 1 -fa -nf "C:\Users\JimmyLi\Videos\12345.mp3" -osrt -otxt
+```
+
+然后执行
+```
+ffmpeg -i "C:\Users\JimmyLi\Videos\12345.mp4" -vf "subtitles='12345_翻译.txt':force_style='Outline=1,Shadow=0,OutlineColour=&H66000000'" 12345_Result.mp4
 ```
